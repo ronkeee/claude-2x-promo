@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude 2× · Double Usage Time</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: 'Google Sans';
+      src: local('Google Sans'), local('GoogleSans-Regular'), local('Product Sans'), local('ProductSans-Regular');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Google Sans';
+      src: local('Google Sans Medium'), local('GoogleSans-Medium');
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Google Sans';
+      src: local('Google Sans Bold'), local('GoogleSans-Bold'), local('Product Sans Bold');
+      font-weight: 700;
+      font-style: normal;
+    }
+  </style>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #1a1a1a;
+      --surface: #222222;
+      --green: #34D399;
+      --green-dim: rgba(52,211,153,0.12);
+      --green-glow: rgba(52,211,153,0.4);
+      --orange: #E8734A;
+      --orange-dim: rgba(232,115,74,0.12);
+      --orange-glow: rgba(232,115,74,0.4);
+      --text: #ffffff;
+      --text-2: rgba(255,255,255,0.5);
+      --text-3: rgba(255,255,255,0.3);
+      --border: rgba(255,255,255,0.08);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .page {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
+
+    /* ── Top bar ── */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 40px;
+      flex-shrink: 0;
+      animation: fadeUp 0.5s ease 0.05s both;
+    }
+
+    .top-left {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+
+    .tz-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: var(--text-2);
+      text-align: right;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .tz-value:hover { color: var(--text); }
+    .tz-value strong { color: var(--text); font-weight: 700; }
+
+    /* Timezone picker modal */
+    .tz-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .tz-modal-overlay.open { display: flex; }
+
+    .tz-modal {
+      background: #222;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      width: 380px;
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: fadeUp 0.3s ease both;
+    }
+    .tz-modal-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+    .tz-search {
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      outline: none;
+      width: 100%;
+    }
+    .tz-search::placeholder { color: var(--text-3); }
+    .tz-search:focus { border-color: rgba(255,255,255,0.2); }
+    .tz-list {
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+      max-height: 50vh;
+    }
+    .tz-list li {
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text-2);
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .tz-list li:hover {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+
+    /* ── Middle content ── */
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0 40px;
+      min-height: 0;
+      gap: 20px;
+    }
+
+    /* Badge */
+    .badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      border-radius: 100px;
+      padding: 8px 22px;
+      font-size: 16px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      animation: fadeUp 0.5s ease 0.1s both;
+      transition: background 0.5s, border-color 0.5s, color 0.5s, box-shadow 0.5s;
+    }
+    .badge.active {
+      background: var(--green-dim);
+      border: 2px solid rgba(52,211,153,0.35);
+      color: var(--green);
+      box-shadow: 0 0 30px var(--green-dim), 0 0 80px rgba(52,211,153,0.06);
+    }
+    .badge.inactive {
+      background: var(--orange-dim);
+      border: 2px solid rgba(232,115,74,0.3);
+      color: var(--orange);
+      box-shadow: 0 0 30px var(--orange-dim);
+    }
+    .badge-pulse {
+      width: 12px; height: 12px; border-radius: 50%;
+      transition: background 0.5s, box-shadow 0.5s;
+    }
+    .badge.active .badge-pulse {
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green-glow);
+      animation: pulse-green 1.5s ease-in-out infinite;
+    }
+    .badge.inactive .badge-pulse {
+      background: var(--orange);
+      box-shadow: 0 0 10px var(--orange-glow);
+      animation: pulse-orange 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 10px var(--green-glow); }
+      50% { box-shadow: 0 0 28px var(--green), 0 0 56px var(--green-dim); }
+    }
+    @keyframes pulse-orange {
+      0%, 100% { box-shadow: 0 0 10px var(--orange-glow); }
+      50% { box-shadow: 0 0 28px var(--orange), 0 0 56px var(--orange-dim); }
+    }
+
+    /* Time left */
+    .time-left {
+      font-family: 'Google Sans', 'Inter', sans-serif;
+      font-size: 60px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: #ffffff;
+      animation: fadeUp 0.5s ease 0.18s both;
+    }
+
+    /* ── Progress bar ── */
+    .bar-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .progress-section {
+      flex: none;
+      height: 50vh;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 40px 24px;
+      min-height: 0;
+      animation: fadeUp 0.5s ease 0.28s both;
+    }
+
+    .progress-track {
+      width: 100%;
+      flex: 1;
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      padding: 0;
+    }
+
+    .seg {
+      flex: 1;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.06);
+      box-shadow: 0 0 6px rgba(255,255,255,0.03);
+      position: relative;
+      overflow: hidden;
+      transition: background 0.4s ease, box-shadow 0.4s ease, opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .seg.entering {
+      opacity: 0;
+      transform: scaleY(0.2);
+      transform-origin: bottom;
+    }
+
+    .seg.filled.active {
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green-dim), 0 0 4px rgba(52,211,153,0.08);
+    }
+    .seg.filled.inactive {
+      background: var(--orange);
+      box-shadow: 0 0 10px var(--orange-dim), 0 0 4px rgba(232,115,74,0.08);
+    }
+
+    .seg.filled::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 45%);
+      border-radius: inherit;
+    }
+
+    .seg.current.active {
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green-glow), 0 0 24px var(--green-dim);
+    }
+    .seg.current.inactive {
+      background: var(--orange);
+      box-shadow: 0 0 12px var(--orange-glow), 0 0 24px var(--orange-dim);
+    }
+
+    .bar-hours {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+      flex-shrink: 0;
+    }
+    .bar-hour {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      transition: color 0.5s;
+    }
+    .bar-hour.active { color: var(--green); }
+    .bar-hour.inactive { color: var(--orange); }
+    .bar-hour-label {
+      font-size: 9px;
+      font-weight: 400;
+      color: var(--text-3);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* Footer */
+    .footer {
+      flex-shrink: 0;
+      text-align: center;
+      padding: 0 40px 16px;
+    }
+    .created-by {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .created-by:hover { color: var(--text-2); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 768px) {
+      body { overflow: auto; }
+      .page { height: auto; min-height: 100vh; }
+      .top-bar { padding: 16px 20px; }
+      .content { padding: 0 20px; }
+      .badge { padding: 10px 24px; font-size: 16px; }
+      .time-left { font-size: clamp(48px, 12vw, 80px); }
+      .progress-section { padding: 16px 20px 20px; min-height: 40vh; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page">
+
+    <!-- Top bar -->
+    <div class="top-bar">
+      <div class="top-left">Claude Usage Promotion</div>
+      <div class="tz-value" id="tz-display" onclick="openTzPicker()"><strong>Detecting...</strong></div>
+    </div>
+
+    <!-- Center content -->
+    <div class="content">
+      <div class="badge active" id="badge">
+        <div class="badge-pulse"></div>
+        <span id="badge-label">2X ACTIVATE</span>
+      </div>
+    </div>
+
+    <!-- Full-width tall progress bar -->
+    <div class="progress-section">
+      <div class="bar-top-row">
+        <div></div>
+        <div class="time-left" id="time-left">--h --m</div>
+      </div>
+      <div class="progress-track" id="progress-track">
+        <!-- segments injected by JS -->
+      </div>
+      <div class="bar-hours">
+        <div>
+          <div class="bar-hour active" id="bar-hour-start">--:--</div>
+          <div class="bar-hour-label" id="bar-start-label">start</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="bar-hour active" id="bar-hour-end">--:--</div>
+          <div class="bar-hour-label" id="bar-end-label">end</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="mailto:ronkeren@gmail.com" class="created-by">Created by Ron</a>
+    </div>
+
+  </div>
+
+  <!-- Timezone picker modal -->
+  <div class="tz-modal-overlay" id="tz-modal" onclick="closeTzPicker(event)">
+    <div class="tz-modal" onclick="event.stopPropagation()">
+      <div class="tz-modal-title">Select Timezone</div>
+      <input type="text" class="tz-search" id="tz-search" placeholder="Search timezones..." oninput="filterTimezones()">
+      <ul class="tz-list" id="tz-list"></ul>
+    </div>
+  </div>
+
+  <script>
+    // ── Promotion config ──
+    const PROMO_START = '2026-03-13'; // inclusive, in America/New_York
+    const PROMO_END   = '2026-03-27'; // inclusive, in America/New_York
+    const ET_TZ       = 'America/New_York';
+    const PEAK_HOUR_START = 8;  // 08:00 ET
+    const PEAK_HOUR_END   = 14; // 14:00 ET
+    const PEAK_DURATION_MS = (PEAK_HOUR_END - PEAK_HOUR_START) * 3600 * 1000;
+    const OFF_PEAK_DURATION_MS = (24 - (PEAK_HOUR_END - PEAK_HOUR_START)) * 3600 * 1000;
+    const TOTAL_SEGS = 30;
+
+    let selectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    function pad(n) { return String(Math.max(0, Math.floor(n))).padStart(2, '0'); }
+
+    let segsReady = false;
+    let fillAnimDone = false;
+
+    // ── Timezone-aware peak window computation ──
+    // Given a Date, find today's peak window (08:00–14:00 ET) as absolute UTC timestamps.
+    // We build a date string in ET, then parse it back to get exact UTC ms.
+    function etDateParts(date) {
+      // Get date components in America/New_York
+      const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: ET_TZ,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      });
+      const parts = {};
+      for (const p of fmt.formatToParts(date)) {
+        parts[p.type] = p.value;
+      }
+      return parts; // { year, month, day, hour, minute, second }
+    }
+
+    function etToUtcMs(year, month, day, hour) {
+      // Start from UTC midnight of the given date (avoids local-time parsing bugs)
+      const utcMidnight = Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0);
+      // Naive guess: add the desired hour offset from UTC midnight
+      const guess = new Date(utcMidnight + hour * 3600000);
+      // Check what ET hour that UTC timestamp corresponds to
+      const etParts = etDateParts(guess);
+      const etHour = parseInt(etParts.hour === '24' ? '0' : etParts.hour);
+      // Shift to land on the correct ET hour (handles DST automatically)
+      const diff = etHour - hour;
+      return guess.getTime() - diff * 3600000;
+    }
+
+    function getTodayPeakWindow(now) {
+      // Get today's date in ET
+      const p = etDateParts(now);
+      const peakStart = etToUtcMs(p.year, p.month, p.day, PEAK_HOUR_START);
+      const peakEnd   = etToUtcMs(p.year, p.month, p.day, PEAK_HOUR_END);
+      return { peakStart, peakEnd };
+    }
+
+    function isInPromoPeriod(now) {
+      const p = etDateParts(now);
+      const etDate = `${p.year}-${p.month}-${p.day}`;
+      return etDate >= PROMO_START && etDate <= PROMO_END;
+    }
+
+    // ?preview=active | ?preview=deactive — force a state for design preview
+    const PREVIEW_STATE = new URLSearchParams(location.search).get('preview'); // 'active' | 'deactive' | null
+
+    function getCycleInfo(now) {
+      const nowMs = now.getTime();
+      const { peakStart, peakEnd } = getTodayPeakWindow(now);
+
+      // Also get yesterday's and tomorrow's windows for edge cases (off-peak spans midnight)
+      const yesterday = new Date(nowMs - 86400000);
+      const tomorrow  = new Date(nowMs + 86400000);
+      const prevWindow = getTodayPeakWindow(yesterday);
+      const nextWindow = getTodayPeakWindow(tomorrow);
+
+      // Preview override: fake being mid-peak (50% through) or mid-off-peak
+      if (PREVIEW_STATE === 'deactive') {
+        const fakeNowMs = peakStart + PEAK_DURATION_MS * 0.5;
+        const elapsed = fakeNowMs - peakStart;
+        const remaining = (peakEnd - fakeNowMs) / 1000;
+        const pct = (elapsed / PEAK_DURATION_MS) * 100;
+        return { active: false, remaining, pct };
+      }
+      if (PREVIEW_STATE === 'active') {
+        const offStart = peakEnd;
+        const offEnd = nextWindow.peakStart;
+        const total = offEnd - offStart;
+        const fakeNowMs = offStart + total * 0.4;
+        const remaining = (offEnd - fakeNowMs) / 1000;
+        const pct = ((fakeNowMs - offStart) / total) * 100;
+        return { active: true, remaining, pct };
+      }
+
+      // Check if we're in peak (08:00–14:00 ET)
+      if (nowMs >= peakStart && nowMs < peakEnd) {
+        // Currently in peak → 2X DEACTIVATE
+        const elapsed = nowMs - peakStart;
+        const remaining = (peakEnd - nowMs) / 1000;
+        const pct = (elapsed / PEAK_DURATION_MS) * 100;
+        return { active: false, remaining, pct, peakStartMs: peakStart, peakEndMs: peakEnd };
+      } else {
+        // Currently off-peak → 2X ACTIVATE
+        // Off-peak runs from previous peakEnd to current peakStart
+        let offPeakStart, offPeakEnd;
+        if (nowMs >= peakEnd) {
+          // After today's peak → off-peak is peakEnd today to peakStart tomorrow
+          offPeakStart = peakEnd;
+          offPeakEnd   = nextWindow.peakStart;
+        } else {
+          // Before today's peak → off-peak is yesterday's peakEnd to today's peakStart
+          offPeakStart = prevWindow.peakEnd;
+          offPeakEnd   = peakStart;
+        }
+        const totalDuration = offPeakEnd - offPeakStart;
+        const elapsed = nowMs - offPeakStart;
+        const remaining = (offPeakEnd - nowMs) / 1000;
+        const pct = (elapsed / totalDuration) * 100;
+        return { active: true, remaining, pct, peakStartMs: offPeakStart, peakEndMs: offPeakEnd };
+      }
+    }
+
+    // Convert an ET hour (e.g., 8 or 14) to a display string in the user's selected timezone
+    function etHourToLocal(etHour) {
+      const now = new Date();
+      const p = etDateParts(now);
+      const utcMs = etToUtcMs(p.year, p.month, p.day, etHour);
+      const d = new Date(utcMs);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: selectedTz });
+    }
+
+    function buildSegments() {
+      const track = document.getElementById('progress-track');
+      track.innerHTML = '';
+      for (let i = 0; i < TOTAL_SEGS; i++) {
+        const el = document.createElement('div');
+        el.className = 'seg entering';
+        el.id = 'seg-' + i;
+        el.style.transitionDelay = (0.3 + i * 0.04) + 's';
+        track.appendChild(el);
+      }
+      // Phase 1: bars scale up from bottom
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          for (let i = 0; i < TOTAL_SEGS; i++) {
+            const el = document.getElementById('seg-' + i);
+            if (el) el.classList.remove('entering');
+          }
+          // Phase 2: after scale-up, fill segments left to right
+          setTimeout(() => {
+            for (let i = 0; i < TOTAL_SEGS; i++) {
+              const el = document.getElementById('seg-' + i);
+              if (el) el.style.transitionDelay = '0s';
+            }
+            segsReady = true;
+            animateFill();
+          }, 1800);
+        });
+      });
+    }
+
+    function animateFill() {
+      const now = new Date();
+      const cycle = getCycleInfo(now);
+      const cls = cycle.active ? 'active' : 'inactive';
+      const filledCount = Math.floor((cycle.pct / 100) * TOTAL_SEGS);
+
+      let i = 0;
+      function fillNext() {
+        if (i > filledCount || i >= TOTAL_SEGS) {
+          fillAnimDone = true;
+          return;
+        }
+        const seg = document.getElementById('seg-' + i);
+        if (seg) {
+          if (i < filledCount) {
+            seg.className = 'seg filled ' + cls;
+          } else if (i === filledCount) {
+            seg.className = 'seg filled current ' + cls;
+          }
+        }
+        i++;
+        setTimeout(fillNext, 40);
+      }
+      fillNext();
+    }
+
+    function update() {
+      const now = new Date();
+      const inPromo = isInPromoPeriod(now);
+      const cycle = getCycleInfo(now);
+      const h = Math.floor(cycle.remaining / 3600);
+      const m = Math.floor((cycle.remaining % 3600) / 60);
+
+      const badge = document.getElementById('badge');
+      const badgeLabel = document.getElementById('badge-label');
+      const timeLeft = document.getElementById('time-left');
+      const hourStart = document.getElementById('bar-hour-start');
+      const hourEnd = document.getElementById('bar-hour-end');
+      const startLabel = document.getElementById('bar-start-label');
+      const endLabel = document.getElementById('bar-end-label');
+
+      const cls = cycle.active ? 'active' : 'inactive';
+
+      badge.className = 'badge ' + cls;
+      badgeLabel.textContent = cycle.active ? '2X ACTIVATE' : '2X DEACTIVATE';
+      timeLeft.textContent = h + 'h ' + pad(m) + 'm left';
+
+      // Update segments (only after fill animation is done)
+      if (fillAnimDone) {
+        const filledCount = Math.floor((cycle.pct / 100) * TOTAL_SEGS);
+        for (let i = 0; i < TOTAL_SEGS; i++) {
+          const seg = document.getElementById('seg-' + i);
+          if (!seg) continue;
+          if (i < filledCount) {
+            seg.className = 'seg filled ' + cls;
+          } else if (i === filledCount) {
+            seg.className = 'seg filled current ' + cls;
+          } else {
+            seg.className = 'seg';
+          }
+        }
+      }
+
+      // Show hours in user's selected timezone, converted from ET peak hours
+      if (cycle.active) {
+        // Off-peak: show off-peak window (peakEnd → next peakStart)
+        hourStart.textContent = etHourToLocal(PEAK_HOUR_END);
+        hourEnd.textContent = etHourToLocal(PEAK_HOUR_START);
+        startLabel.textContent = 'off-peak start';
+        endLabel.textContent = 'off-peak end';
+      } else {
+        // Peak: show peak window (peakStart → peakEnd)
+        hourStart.textContent = etHourToLocal(PEAK_HOUR_START);
+        hourEnd.textContent = etHourToLocal(PEAK_HOUR_END);
+        startLabel.textContent = 'peak start';
+        endLabel.textContent = 'peak end';
+      }
+      hourStart.className = 'bar-hour ' + cls;
+      hourEnd.className = 'bar-hour ' + cls;
+    }
+
+    async function detectTimezone() {
+      const el = document.getElementById('tz-display');
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) throw new Error('api fail');
+        const data = await res.json();
+        if (data.timezone && data.city) {
+          selectedTz = data.timezone;
+          el.innerHTML = `<strong>${data.timezone}</strong> · ${data.city}, ${data.country_code}`;
+          update();
+          return;
+        }
+      } catch (_) { /* fall through */ }
+      el.innerHTML = `<strong>${selectedTz}</strong>`;
+    }
+
+    // ── Timezone picker ──
+    const ALL_TIMEZONES = Intl.supportedValuesOf
+      ? Intl.supportedValuesOf('timeZone')
+      : [
+        'UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+        'America/Anchorage','Pacific/Honolulu','America/Toronto','America/Vancouver',
+        'America/Sao_Paulo','America/Argentina/Buenos_Aires','Europe/London','Europe/Paris',
+        'Europe/Berlin','Europe/Madrid','Europe/Rome','Europe/Amsterdam','Europe/Moscow',
+        'Europe/Istanbul','Africa/Cairo','Africa/Lagos','Africa/Johannesburg',
+        'Asia/Dubai','Asia/Kolkata','Asia/Bangkok','Asia/Singapore','Asia/Shanghai',
+        'Asia/Tokyo','Asia/Seoul','Australia/Sydney','Australia/Melbourne',
+        'Pacific/Auckland','Pacific/Fiji'
+      ];
+
+    function openTzPicker() {
+      document.getElementById('tz-modal').classList.add('open');
+      const search = document.getElementById('tz-search');
+      search.value = '';
+      renderTzList('');
+      setTimeout(() => search.focus(), 100);
+    }
+
+    function closeTzPicker(e) {
+      if (e.target === document.getElementById('tz-modal')) {
+        document.getElementById('tz-modal').classList.remove('open');
+      }
+    }
+
+    function filterTimezones() {
+      const q = document.getElementById('tz-search').value;
+      renderTzList(q);
+    }
+
+    function renderTzList(query) {
+      const list = document.getElementById('tz-list');
+      const q = query.toLowerCase();
+      const filtered = ALL_TIMEZONES.filter(tz => tz.toLowerCase().includes(q));
+      list.innerHTML = filtered.map(tz =>
+        `<li onclick="selectTz('${tz}')">${tz.replace(/_/g, ' ')}</li>`
+      ).join('');
+    }
+
+    function selectTz(tz) {
+      selectedTz = tz;
+      const el = document.getElementById('tz-display');
+      const city = tz.split('/').pop().replace(/_/g, ' ');
+      el.innerHTML = `<strong>${tz}</strong> · ${city}`;
+      document.getElementById('tz-modal').classList.remove('open');
+      // Reset and re-animate everything
+      segsReady = false;
+      fillAnimDone = false;
+      buildSegments();
+      update();
+    }
+
+    buildSegments();
+    update();
+    detectTimezone();
+    setInterval(update, 1000);
+  </script>
+</body>
+</html>
