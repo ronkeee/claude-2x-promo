@@ -76,7 +76,11 @@
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--text-3);
+      text-decoration: none;
+      cursor: pointer;
+      transition: color 0.2s;
     }
+    .top-left:hover { color: #cccccc; }
 
     .tz-value {
       font-family: 'Space Mono', monospace;
@@ -354,7 +358,7 @@
 
     <!-- Top bar -->
     <div class="top-bar">
-      <div class="top-left">Claude Usage Promotion</div>
+      <a class="top-left" href="https://support.claude.com/en/articles/14063676-claude-march-2026-usage-promotion" target="_blank" rel="noopener">Claude Usage Promotion</a>
       <div class="tz-value" id="tz-display" onclick="openTzPicker()">Detecting...</div>
     </div>
 
