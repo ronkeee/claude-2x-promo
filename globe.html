@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude 2× · Globe View</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: 'Google Sans';
+      src: local('Google Sans'), local('GoogleSans-Regular'), local('Product Sans');
+      font-weight: 400; font-style: normal;
+    }
+    @font-face {
+      font-family: 'Google Sans';
+      src: local('Google Sans Medium'), local('GoogleSans-Medium');
+      font-weight: 500; font-style: normal;
+    }
+  </style>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080810;
+      --surface: rgba(10,10,20,0.75);
+      --green: #34D399;
+      --green-dim: rgba(52,211,153,0.12);
+      --green-glow: rgba(52,211,153,0.4);
+      --orange: #E8734A;
+      --orange-dim: rgba(232,115,74,0.12);
+      --orange-glow: rgba(232,115,74,0.4);
+      --text: #ffffff;
+      --text-2: rgba(255,255,255,0.5);
+      --text-3: rgba(255,255,255,0.3);
+      --border: rgba(255,255,255,0.08);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      height: 100vh;
+      overflow: hidden;
+      cursor: grab;
+    }
+    body:active { cursor: grabbing; }
+
+    #globe-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    /* Scanline overlay for futuristic feel */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.04) 2px,
+        rgba(0,0,0,0.04) 4px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* UI Overlay */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+    }
+    .overlay * { pointer-events: auto; }
+
+    /* ── Top bar ── */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 40px;
+      animation: fadeUp 0.5s ease 0.05s both;
+    }
+
+    .top-left {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+
+    .tz-value {
+      font-size: 11px;
+      color: var(--text-2);
+      text-align: right;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.2s;
+      letter-spacing: 0.05em;
+    }
+    .tz-value:hover { color: var(--text); }
+    .tz-value strong { color: var(--text); font-weight: 700; }
+
+    /* ── Badge ── */
+    .badge-wrap {
+      display: flex;
+      justify-content: center;
+      padding-top: 16px;
+      animation: fadeUp 0.5s ease 0.12s both;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      border-radius: 100px;
+      padding: 8px 22px;
+      font-size: 14px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      transition: background 0.5s, border-color 0.5s, color 0.5s, box-shadow 0.5s;
+      backdrop-filter: blur(12px);
+    }
+    .badge.active {
+      background: var(--green-dim);
+      border: 2px solid rgba(52,211,153,0.35);
+      color: var(--green);
+      box-shadow: 0 0 30px var(--green-dim), 0 0 80px rgba(52,211,153,0.06);
+    }
+    .badge.inactive {
+      background: var(--orange-dim);
+      border: 2px solid rgba(232,115,74,0.3);
+      color: var(--orange);
+      box-shadow: 0 0 30px var(--orange-dim);
+    }
+    .badge-pulse {
+      width: 10px; height: 10px; border-radius: 50%;
+      transition: background 0.5s, box-shadow 0.5s;
+    }
+    .badge.active .badge-pulse {
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green-glow);
+      animation: pulse-green 1.5s ease-in-out infinite;
+    }
+    .badge.inactive .badge-pulse {
+      background: var(--orange);
+      box-shadow: 0 0 10px var(--orange-glow);
+      animation: pulse-orange 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 10px var(--green-glow); }
+      50% { box-shadow: 0 0 28px var(--green), 0 0 56px var(--green-dim); }
+    }
+    @keyframes pulse-orange {
+      0%, 100% { box-shadow: 0 0 10px var(--orange-glow); }
+      50% { box-shadow: 0 0 28px var(--orange), 0 0 56px var(--orange-dim); }
+    }
+
+    /* ── Spacer pushes bottom panels down ── */
+    .spacer { flex: 1; pointer-events: none; }
+
+    /* ── Bottom panels ── */
+    .bottom-panels {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 40px 20px;
+      gap: 20px;
+      animation: fadeUp 0.5s ease 0.3s both;
+    }
+
+    .panel {
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 22px;
+    }
+
+    .panel-left {
+      min-width: 240px;
+    }
+
+    .time-left {
+      font-family: 'Google Sans', 'Inter', sans-serif;
+      font-size: 42px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .panel-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 4px;
+    }
+
+    .panel-hours {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      transition: color 0.5s;
+    }
+    .panel-hours.active { color: var(--green); }
+    .panel-hours.inactive { color: var(--orange); }
+
+    .panel-right {
+      min-width: 160px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+    .legend-item:last-child { margin-bottom: 0; }
+    .legend-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+    .legend-dot.green { background: var(--green); box-shadow: 0 0 8px var(--green-glow); }
+    .legend-dot.orange { background: var(--orange); box-shadow: 0 0 8px var(--orange-glow); }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 0 40px 14px;
+      animation: fadeUp 0.5s ease 0.35s both;
+    }
+    .created-by {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .created-by:hover { color: var(--text-2); }
+
+    /* Timezone picker modal */
+    .tz-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .tz-modal-overlay.open { display: flex; }
+    .tz-modal {
+      background: #151520;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      width: 380px;
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: fadeUp 0.3s ease both;
+      backdrop-filter: blur(20px);
+    }
+    .tz-modal-title {
+      font-size: 13px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-2);
+    }
+    .tz-search {
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff; outline: none; width: 100%;
+    }
+    .tz-search::placeholder { color: var(--text-3); }
+    .tz-search:focus { border-color: rgba(255,255,255,0.2); }
+    .tz-list {
+      list-style: none; overflow-y: auto; flex: 1; max-height: 50vh;
+    }
+    .tz-list li {
+      padding: 8px 12px; font-size: 11px; color: var(--text-2);
+      cursor: pointer; border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+      text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .tz-list li:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+    /* Link back */
+    .view-link {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      text-decoration: none;
+      transition: color 0.2s;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+    }
+    .view-link:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 768px) {
+      .top-bar { padding: 16px 20px; }
+      .bottom-panels { padding: 0 20px 16px; flex-direction: column; align-items: stretch; }
+      .time-left { font-size: 32px; }
+      .panel-left, .panel-right { min-width: auto; }
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <canvas id="globe-canvas"></canvas>
+  <div class="scanlines"></div>
+
+  <div class="overlay">
+    <!-- Top bar -->
+    <div class="top-bar">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <span class="top-left">Claude Usage Promotion</span>
+        <a href="index.html" class="view-link">Timeline View</a>
+      </div>
+      <div class="tz-value" id="tz-display" onclick="openTzPicker()"><strong>Detecting...</strong></div>
+    </div>
+
+    <!-- Badge -->
+    <div class="badge-wrap">
+      <div class="badge active" id="badge">
+        <div class="badge-pulse"></div>
+        <span id="badge-label">2X ACTIVATE</span>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <!-- Bottom panels -->
+    <div class="bottom-panels">
+      <div class="panel panel-left">
+        <div class="time-left" id="time-left">--h --m left</div>
+        <div class="panel-label" id="status-label">Off-peak hours</div>
+        <div class="panel-hours active" id="panel-hours">--:-- &mdash; --:--</div>
+      </div>
+      <div class="panel panel-right">
+        <div class="legend-item">
+          <div class="legend-dot green"></div>
+          <span>Off-peak · 2× usage</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot orange"></div>
+          <span>Peak · Normal usage</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="mailto:ronkeren@gmail.com" class="created-by">Created by Ron</a>
+    </div>
+  </div>
+
+  <!-- Timezone picker modal -->
+  <div class="tz-modal-overlay" id="tz-modal" onclick="closeTzPicker(event)">
+    <div class="tz-modal" onclick="event.stopPropagation()">
+      <div class="tz-modal-title">Select Timezone</div>
+      <input type="text" class="tz-search" id="tz-search" placeholder="Search timezones..." oninput="filterTimezones()">
+      <ul class="tz-list" id="tz-list"></ul>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ═══════════════════════════════════════════
+    // DATA LOGIC (copied from index.html)
+    // ═══════════════════════════════════════════
+    const PROMO_START = '2026-03-13';
+    const PROMO_END   = '2026-03-27';
+    const ET_TZ       = 'America/New_York';
+    const PEAK_HOUR_START = 8;
+    const PEAK_HOUR_END   = 14;
+    const PEAK_DURATION_MS = (PEAK_HOUR_END - PEAK_HOUR_START) * 3600 * 1000;
+    const OFF_PEAK_DURATION_MS = (24 - (PEAK_HOUR_END - PEAK_HOUR_START)) * 3600 * 1000;
+
+    let selectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let userLat = null, userLon = null, userCity = '';
+
+    function pad(n) { return String(Math.max(0, Math.floor(n))).padStart(2, '0'); }
+
+    function etDateParts(date) {
+      const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: ET_TZ,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      });
+      const parts = {};
+      for (const p of fmt.formatToParts(date)) parts[p.type] = p.value;
+      return parts;
+    }
+
+    function etToUtcMs(year, month, day, hour) {
+      const utcMidnight = Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0);
+      const guess = new Date(utcMidnight + hour * 3600000);
+      const etParts = etDateParts(guess);
+      const etHour = parseInt(etParts.hour === '24' ? '0' : etParts.hour);
+      const diff = etHour - hour;
+      return guess.getTime() - diff * 3600000;
+    }
+
+    function getTodayPeakWindow(now) {
+      const p = etDateParts(now);
+      const peakStart = etToUtcMs(p.year, p.month, p.day, PEAK_HOUR_START);
+      const peakEnd   = etToUtcMs(p.year, p.month, p.day, PEAK_HOUR_END);
+      return { peakStart, peakEnd };
+    }
+
+    function isInPromoPeriod(now) {
+      const p = etDateParts(now);
+      const etDate = `${p.year}-${p.month}-${p.day}`;
+      return etDate >= PROMO_START && etDate <= PROMO_END;
+    }
+
+    const PREVIEW_STATE = new URLSearchParams(location.search).get('preview');
+
+    function getCycleInfo(now) {
+      const nowMs = now.getTime();
+      const { peakStart, peakEnd } = getTodayPeakWindow(now);
+      const yesterday = new Date(nowMs - 86400000);
+      const tomorrow  = new Date(nowMs + 86400000);
+      const prevWindow = getTodayPeakWindow(yesterday);
+      const nextWindow = getTodayPeakWindow(tomorrow);
+
+      if (PREVIEW_STATE === 'deactive') {
+        const fakeNowMs = peakStart + PEAK_DURATION_MS * 0.5;
+        const remaining = (peakEnd - fakeNowMs) / 1000;
+        const pct = ((fakeNowMs - peakStart) / PEAK_DURATION_MS) * 100;
+        return { active: false, remaining, pct };
+      }
+      if (PREVIEW_STATE === 'active') {
+        const offStart = peakEnd;
+        const offEnd = nextWindow.peakStart;
+        const total = offEnd - offStart;
+        const fakeNowMs = offStart + total * 0.4;
+        const remaining = (offEnd - fakeNowMs) / 1000;
+        const pct = ((fakeNowMs - offStart) / total) * 100;
+        return { active: true, remaining, pct };
+      }
+
+      if (nowMs >= peakStart && nowMs < peakEnd) {
+        const remaining = (peakEnd - nowMs) / 1000;
+        const pct = ((nowMs - peakStart) / PEAK_DURATION_MS) * 100;
+        return { active: false, remaining, pct };
+      } else {
+        let offPeakStart, offPeakEnd;
+        if (nowMs >= peakEnd) {
+          offPeakStart = peakEnd;
+          offPeakEnd   = nextWindow.peakStart;
+        } else {
+          offPeakStart = prevWindow.peakEnd;
+          offPeakEnd   = peakStart;
+        }
+        const elapsed = nowMs - offPeakStart;
+        const remaining = (offPeakEnd - nowMs) / 1000;
+        const pct = (elapsed / (offPeakEnd - offPeakStart)) * 100;
+        return { active: true, remaining, pct };
+      }
+    }
+
+    function etHourToLocal(etHour) {
+      const now = new Date();
+      const p = etDateParts(now);
+      const utcMs = etToUtcMs(p.year, p.month, p.day, etHour);
+      const d = new Date(utcMs);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: selectedTz });
+    }
+
+    // ═══════════════════════════════════════════
+    // THREE.JS SCENE
+    // ═══════════════════════════════════════════
+    const DEG2RAD = Math.PI / 180;
+    const canvas = document.getElementById('globe-canvas');
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x080810);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0.2, 3.8);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.3;
+    controls.minDistance = 1.6;
+    controls.maxDistance = 5.0;
+    controls.enablePan = false;
+
+    // ── Globe group ──
+    const globeGroup = new THREE.Group();
+    scene.add(globeGroup);
+
+    // ── 0. Solid dark inner sphere (occludes back-facing elements) ──
+    const innerGeo = new THREE.SphereGeometry(0.995, 48, 24);
+    const innerMat = new THREE.MeshBasicMaterial({ color: 0x060610 });
+    globeGroup.add(new THREE.Mesh(innerGeo, innerMat));
+
+    // ── 1. Dot-matrix surface texture ──
+    // Scatter dots on the sphere surface for a subtle texture
+    const DOT_COUNT = 1800;
+    const dotPositions = new Float32Array(DOT_COUNT * 3);
+    const dotSizes = new Float32Array(DOT_COUNT);
+    for (let i = 0; i < DOT_COUNT; i++) {
+      // Uniform sphere distribution
+      const u = Math.random();
+      const v = Math.random();
+      const theta = 2 * Math.PI * u;
+      const phi = Math.acos(2 * v - 1);
+      const r = 1.004;
+      dotPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      dotPositions[i * 3 + 1] = r * Math.cos(phi);
+      dotPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+      dotSizes[i] = 0.8 + Math.random() * 0.4;
+    }
+    const dotGeo = new THREE.BufferGeometry();
+    dotGeo.setAttribute('position', new THREE.BufferAttribute(dotPositions, 3));
+    dotGeo.setAttribute('size', new THREE.BufferAttribute(dotSizes, 1));
+
+    const dotMat = new THREE.ShaderMaterial({
+      vertexShader: `
+        attribute float size;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (250.0 / -mv.z);
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: `
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          if (d > 0.45) discard;
+          float alpha = smoothstep(0.45, 0.0, d) * 0.5;
+          gl_FragColor = vec4(0.12, 0.38, 0.48, alpha);
+        }
+      `,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false
+    });
+    globeGroup.add(new THREE.Points(dotGeo, dotMat));
+
+    // ── 2. Latitude grid lines ──
+    const gridGroup = new THREE.Group();
+    gridGroup.renderOrder = 2;
+    for (let lat = -75; lat <= 75; lat += 15) {
+      const pts = [];
+      const phi = (90 - lat) * DEG2RAD;
+      const r = 1.008;
+      for (let lon = 0; lon <= 360; lon += 2) {
+        const theta = lon * DEG2RAD;
+        pts.push(new THREE.Vector3(
+          r * Math.sin(phi) * Math.sin(theta),
+          r * Math.cos(phi),
+          r * Math.sin(phi) * Math.cos(theta)
+        ));
+      }
+      const isEquator = lat === 0;
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({
+          color: isEquator ? 0x2a8899 : 0x1a5566,
+          transparent: true,
+          opacity: isEquator ? 0.6 : 0.4,
+          depthTest: true
+        })
+      );
+      line.renderOrder = 2;
+      gridGroup.add(line);
+    }
+    globeGroup.add(gridGroup);
+
+    // ── 3. Timezone meridian lines ──
+    const meridianGroup = new THREE.Group();
+    globeGroup.add(meridianGroup);
+
+    for (let i = 0; i < 24; i++) {
+      const lon = i * 15 - 180;
+      const points = [];
+      for (let lat = -90; lat <= 90; lat += 2) {
+        const phi = (90 - lat) * DEG2RAD;
+        const theta = (lon + 180) * DEG2RAD;
+        const r = 1.008;
+        points.push(new THREE.Vector3(
+          r * Math.sin(phi) * Math.sin(theta),
+          r * Math.cos(phi),
+          r * Math.sin(phi) * Math.cos(theta)
+        ));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(points);
+
+      // Highlight ET (-75°) and UTC (0°) meridians
+      let color = 0x1a4455;
+      let opacity = 0.35;
+      if (lon === -75) { color = 0xE8734A; opacity = 0.6; }
+      else if (lon === 0) { color = 0x88bbdd; opacity = 0.5; }
+
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+        color, transparent: true, opacity, depthTest: true
+      }));
+      line.renderOrder = 2;
+      meridianGroup.add(line);
+    }
+
+    // ── Equator line ──
+    const eqPoints = [];
+    for (let lon = 0; lon <= 360; lon += 2) {
+      const theta = lon * DEG2RAD;
+      const r = 1.003;
+      eqPoints.push(new THREE.Vector3(r * Math.sin(theta), 0, r * Math.cos(theta)));
+    }
+    meridianGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(eqPoints),
+      new THREE.LineBasicMaterial({ color: 0x2a7788, transparent: true, opacity: 0.5 })
+    ));
+
+    // ── Meridian labels (ET, UTC) ──
+    function createLabel(text, color, position) {
+      const c = document.createElement('canvas');
+      c.width = 128; c.height = 48;
+      const ctx = c.getContext('2d');
+      ctx.font = 'bold 28px "Space Mono", monospace';
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 64, 24);
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.premultiplyAlpha = false;
+      tex.needsUpdate = true;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.7, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(position);
+      sprite.scale.set(0.3, 0.12, 1);
+      return sprite;
+    }
+
+    // ET label at longitude -75, equator
+    const etTheta = (-75 + 180) * DEG2RAD;
+    globeGroup.add(createLabel('ET', '#E8734A', new THREE.Vector3(
+      1.08 * Math.sin(etTheta), 0.15, 1.08 * Math.cos(etTheta)
+    )));
+
+    // UTC label at longitude 0, equator
+    const utcTheta = (0 + 180) * DEG2RAD;
+    globeGroup.add(createLabel('UTC', '#6688aa', new THREE.Vector3(
+      1.08 * Math.sin(utcTheta), 0.15, 1.08 * Math.cos(utcTheta)
+    )));
+
+    // ── 4. Peak zone band (shader overlay) ──
+    const bandGeo = new THREE.SphereGeometry(1.006, 128, 64);
+    const bandMat = new THREE.ShaderMaterial({
+      uniforms: {
+        u_isPeak: { value: 0.0 },
+        u_greenColor: { value: new THREE.Color(0x34D399) },
+        u_orangeColor: { value: new THREE.Color(0xE8734A) },
+        u_peakCenterTheta: { value: (-75 + 180) * DEG2RAD },
+        u_bandWidth: { value: 30.0 * DEG2RAD },
+        u_time: { value: 0 }
+      },
+      vertexShader: `
+        varying vec3 vPos;
+        varying float vTheta;
+        void main() {
+          vPos = position;
+          vTheta = atan(position.x, position.z); // -PI to PI
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float u_isPeak;
+        uniform vec3 u_greenColor;
+        uniform vec3 u_orangeColor;
+        uniform float u_peakCenterTheta;
+        uniform float u_bandWidth;
+        uniform float u_time;
+        varying vec3 vPos;
+        varying float vTheta;
+
+        void main() {
+          // Distance from ET meridian (wrapping around)
+          float diff = abs(vTheta - u_peakCenterTheta);
+          if (diff > 3.14159) diff = 6.28318 - diff;
+          float inBand = 1.0 - smoothstep(u_bandWidth * 0.4, u_bandWidth * 0.6, diff);
+
+          // During peak: orange band + dim green elsewhere
+          // During off-peak: all green
+          vec3 color;
+          float alpha;
+
+          if (u_isPeak > 0.5) {
+            color = mix(u_greenColor, u_orangeColor, inBand);
+            alpha = mix(0.01, 0.15, inBand);
+          } else {
+            // Off-peak: very subtle green glow, pulsing
+            float pulse = 0.5 + 0.5 * sin(u_time * 0.8);
+            color = u_greenColor;
+            alpha = mix(0.005, 0.015, pulse);
+          }
+
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.FrontSide
+    });
+    const bandMesh = new THREE.Mesh(bandGeo, bandMat);
+    globeGroup.add(bandMesh);
+
+    // ── 5. Atmosphere glow ──
+    const atmosGeo = new THREE.SphereGeometry(1.14, 64, 32);
+    const atmosMat = new THREE.ShaderMaterial({
+      uniforms: {
+        u_color: { value: new THREE.Color(0x34D399) },
+        u_intensity: { value: 0.35 }
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vViewDir;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          vec4 worldPos = modelViewMatrix * vec4(position, 1.0);
+          vViewDir = normalize(-worldPos.xyz);
+          gl_Position = projectionMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 u_color;
+        uniform float u_intensity;
+        varying vec3 vNormal;
+        varying vec3 vViewDir;
+        void main() {
+          float fresnel = 1.0 - dot(vNormal, vViewDir);
+          fresnel = pow(fresnel, 4.5) * u_intensity;
+          gl_FragColor = vec4(u_color, fresnel);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending
+    });
+    const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
+    globeGroup.add(atmosMesh);
+
+    // ── 6. Star field ──
+    const starCount = 500;
+    const starPos = new Float32Array(starCount * 3);
+    const starSizes = new Float32Array(starCount);
+    for (let i = 0; i < starCount; i++) {
+      const r = 5 + Math.random() * 15;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      starPos[i * 3 + 2] = r * Math.cos(phi);
+      starSizes[i] = 0.5 + Math.random() * 1.5;
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+    const starMat = new THREE.ShaderMaterial({
+      vertexShader: `
+        attribute float size;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (200.0 / -mv.z);
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: `
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          if (d > 0.5) discard;
+          float alpha = smoothstep(0.5, 0.0, d) * 0.4;
+          gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    scene.add(new THREE.Points(starGeo, starMat));
+
+    // ── 7. Orbital ring ──
+    const ringPoints = [];
+    for (let i = 0; i <= 360; i += 1) {
+      const a = i * DEG2RAD;
+      ringPoints.push(new THREE.Vector3(1.35 * Math.cos(a), 0, 1.35 * Math.sin(a)));
+    }
+    const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPoints);
+    const ringLine = new THREE.Line(ringGeo, new THREE.LineBasicMaterial({
+      color: 0x34D399, transparent: true, opacity: 0.08
+    }));
+    ringLine.rotation.x = 0.3;
+    ringLine.rotation.z = 0.15;
+    globeGroup.add(ringLine);
+
+    // Second orbital ring
+    const ring2 = ringLine.clone();
+    ring2.rotation.x = -0.5;
+    ring2.rotation.z = 0.8;
+    ring2.material = new THREE.LineBasicMaterial({
+      color: 0x34D399, transparent: true, opacity: 0.05
+    });
+    globeGroup.add(ring2);
+
+    // ── 8. User location marker ──
+    let userMarker = null;
+    let userMarkerLabel = null;
+
+    function latLonToVec3(lat, lon, r = 1.01) {
+      const phi = (90 - lat) * DEG2RAD;
+      const theta = (lon + 180) * DEG2RAD;
+      return new THREE.Vector3(
+        r * Math.sin(phi) * Math.sin(theta),
+        r * Math.cos(phi),
+        r * Math.sin(phi) * Math.cos(theta)
+      );
+    }
+
+    function placeUserMarker(lat, lon, city) {
+      // Pulsing dot
+      const geo = new THREE.SphereGeometry(0.015, 12, 12);
+      const mat = new THREE.MeshBasicMaterial({ color: 0x34D399 });
+      userMarker = new THREE.Mesh(geo, mat);
+      const pos = latLonToVec3(lat, lon, 1.01);
+      userMarker.position.copy(pos);
+      globeGroup.add(userMarker);
+
+      // Glow around marker
+      const glowGeo = new THREE.SphereGeometry(0.03, 12, 12);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x34D399, transparent: true, opacity: 0.3
+      });
+      const glow = new THREE.Mesh(glowGeo, glowMat);
+      glow.position.copy(pos);
+      globeGroup.add(glow);
+
+      // Pin line
+      const pinTop = latLonToVec3(lat, lon, 1.06);
+      const pinGeo = new THREE.BufferGeometry().setFromPoints([pos, pinTop]);
+      const pinLine = new THREE.Line(pinGeo, new THREE.LineBasicMaterial({
+        color: 0x34D399, transparent: true, opacity: 0.5
+      }));
+      globeGroup.add(pinLine);
+
+      // City label
+      if (city) {
+        const label = createLabel(city.toUpperCase(), '#34D399', pinTop.clone().add(new THREE.Vector3(0, 0.04, 0)));
+        label.scale.set(0.25, 0.08, 1);
+        globeGroup.add(label);
+        userMarkerLabel = label;
+      }
+    }
+
+    // ═══════════════════════════════════════════
+    // HTML OVERLAY UPDATES
+    // ═══════════════════════════════════════════
+    function updateUI() {
+      const now = new Date();
+      const cycle = getCycleInfo(now);
+      const h = Math.floor(cycle.remaining / 3600);
+      const m = Math.floor((cycle.remaining % 3600) / 60);
+
+      const badge = document.getElementById('badge');
+      const badgeLabel = document.getElementById('badge-label');
+      const timeLeft = document.getElementById('time-left');
+      const statusLabel = document.getElementById('status-label');
+      const panelHours = document.getElementById('panel-hours');
+
+      const cls = cycle.active ? 'active' : 'inactive';
+
+      badge.className = 'badge ' + cls;
+      badgeLabel.textContent = cycle.active ? '2X ACTIVATE' : '2X DEACTIVATE';
+      timeLeft.textContent = h + 'h ' + pad(m) + 'm left';
+
+      if (cycle.active) {
+        statusLabel.textContent = 'Off-peak hours';
+        panelHours.textContent = etHourToLocal(PEAK_HOUR_END) + ' \u2014 ' + etHourToLocal(PEAK_HOUR_START);
+        panelHours.className = 'panel-hours active';
+      } else {
+        statusLabel.textContent = 'Peak hours';
+        panelHours.textContent = etHourToLocal(PEAK_HOUR_START) + ' \u2014 ' + etHourToLocal(PEAK_HOUR_END);
+        panelHours.className = 'panel-hours inactive';
+      }
+
+      // Update 3D elements
+      const isPeak = !cycle.active;
+      bandMat.uniforms.u_isPeak.value = isPeak ? 1.0 : 0.0;
+      atmosMat.uniforms.u_color.value.set(isPeak ? 0xE8734A : 0x34D399);
+    }
+
+    // ═══════════════════════════════════════════
+    // TIMEZONE PICKER
+    // ═══════════════════════════════════════════
+    const ALL_TIMEZONES = Intl.supportedValuesOf
+      ? Intl.supportedValuesOf('timeZone')
+      : [
+        'UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+        'America/Anchorage','Pacific/Honolulu','America/Toronto','America/Vancouver',
+        'America/Sao_Paulo','America/Argentina/Buenos_Aires','Europe/London','Europe/Paris',
+        'Europe/Berlin','Europe/Madrid','Europe/Rome','Europe/Amsterdam','Europe/Moscow',
+        'Europe/Istanbul','Africa/Cairo','Africa/Lagos','Africa/Johannesburg',
+        'Asia/Dubai','Asia/Kolkata','Asia/Bangkok','Asia/Singapore','Asia/Shanghai',
+        'Asia/Tokyo','Asia/Seoul','Australia/Sydney','Australia/Melbourne',
+        'Pacific/Auckland','Pacific/Fiji'
+      ];
+
+    window.openTzPicker = function() {
+      document.getElementById('tz-modal').classList.add('open');
+      const search = document.getElementById('tz-search');
+      search.value = '';
+      renderTzList('');
+      setTimeout(() => search.focus(), 100);
+    };
+
+    window.closeTzPicker = function(e) {
+      if (e.target === document.getElementById('tz-modal')) {
+        document.getElementById('tz-modal').classList.remove('open');
+      }
+    };
+
+    window.filterTimezones = function() {
+      renderTzList(document.getElementById('tz-search').value);
+    };
+
+    function renderTzList(query) {
+      const list = document.getElementById('tz-list');
+      const q = query.toLowerCase();
+      const filtered = ALL_TIMEZONES.filter(tz => tz.toLowerCase().includes(q));
+      list.innerHTML = filtered.map(tz =>
+        `<li onclick="selectTz('${tz}')">${tz.replace(/_/g, ' ')}</li>`
+      ).join('');
+    }
+
+    window.selectTz = function(tz) {
+      selectedTz = tz;
+      const el = document.getElementById('tz-display');
+      const city = tz.split('/').pop().replace(/_/g, ' ');
+      el.innerHTML = `<strong>${tz}</strong> \u00b7 ${city}`;
+      document.getElementById('tz-modal').classList.remove('open');
+      updateUI();
+    };
+
+    async function detectTimezone() {
+      const el = document.getElementById('tz-display');
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) throw new Error('api fail');
+        const data = await res.json();
+        if (data.timezone && data.city) {
+          selectedTz = data.timezone;
+          el.innerHTML = `<strong>${data.timezone}</strong> \u00b7 ${data.city}, ${data.country_code}`;
+          if (data.latitude && data.longitude) {
+            userLat = data.latitude;
+            userLon = data.longitude;
+            userCity = data.city;
+            placeUserMarker(userLat, userLon, userCity);
+          }
+          updateUI();
+          return;
+        }
+      } catch (_) {}
+      el.innerHTML = `<strong>${selectedTz}</strong>`;
+    }
+
+    // ═══════════════════════════════════════════
+    // ANIMATION LOOP
+    // ═══════════════════════════════════════════
+    const clock = new THREE.Clock();
+    let lastUiUpdate = 0;
+
+    function animate() {
+      const elapsed = clock.getElapsedTime();
+
+      // Update uniforms
+      bandMat.uniforms.u_time.value = elapsed;
+
+      // Pulse user marker
+      if (userMarker) {
+        const scale = 1 + 0.3 * Math.sin(elapsed * 2);
+        userMarker.scale.setScalar(scale);
+      }
+
+      // Update UI every second
+      if (elapsed - lastUiUpdate > 1) {
+        lastUiUpdate = elapsed;
+        updateUI();
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    renderer.setAnimationLoop(animate);
+
+    // ── Resize ──
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ── Init ──
+    updateUI();
+    detectTimezone();
+  </script>
+</body>
+</html>

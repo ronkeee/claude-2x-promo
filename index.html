@@ -40,8 +40,8 @@
       --orange-dim: rgba(232,115,74,0.12);
       --orange-glow: rgba(232,115,74,0.4);
       --text: #ffffff;
-      --text-2: rgba(255,255,255,0.5);
-      --text-3: rgba(255,255,255,0.3);
+      --text-2: #999999;
+      --text-3: #999999;
       --border: rgba(255,255,255,0.08);
     }
 
@@ -81,14 +81,13 @@
     .tz-value {
       font-family: 'Space Mono', monospace;
       font-size: 12px;
-      color: var(--text-2);
+      color: var(--text-3);
       text-align: right;
       text-transform: uppercase;
       cursor: pointer;
       transition: color 0.2s;
     }
-    .tz-value:hover { color: var(--text); }
-    .tz-value strong { color: var(--text); font-weight: 700; }
+    .tz-value:hover { color: #cccccc; }
 
     /* Timezone picker modal */
     .tz-modal-overlay {
@@ -253,7 +252,7 @@
 
     .seg {
       flex: 1;
-      border-radius: 18px;
+      border-radius: 999px;
       background: rgba(255,255,255,0.06);
       box-shadow: 0 0 6px rgba(255,255,255,0.03);
       position: relative;
@@ -338,13 +337,14 @@
     }
 
     @media (max-width: 768px) {
-      body { overflow: auto; }
-      .page { height: auto; min-height: 100vh; }
-      .top-bar { padding: 16px 20px; }
-      .content { padding: 0 20px; }
-      .badge { padding: 10px 24px; font-size: 16px; }
-      .time-left { font-size: clamp(48px, 12vw, 80px); }
-      .progress-section { padding: 16px 20px 20px; min-height: 40vh; }
+      body { overflow: hidden; height: 100dvh; }
+      .page { height: 100dvh; }
+      .top-bar { padding: 12px 20px; }
+      .content { padding: 0 20px; gap: 12px; }
+      .badge { padding: 8px 20px; font-size: 14px; }
+      .time-left { font-size: clamp(36px, 10vw, 60px); }
+      .progress-section { padding: 12px 20px 16px; height: auto; flex: 1; min-height: 0; }
+      .footer { padding: 0 20px 10px; }
     }
   </style>
 </head>
@@ -355,7 +355,7 @@
     <!-- Top bar -->
     <div class="top-bar">
       <div class="top-left">Claude Usage Promotion</div>
-      <div class="tz-value" id="tz-display" onclick="openTzPicker()"><strong>Detecting...</strong></div>
+      <div class="tz-value" id="tz-display" onclick="openTzPicker()">Detecting...</div>
     </div>
 
     <!-- Center content -->
@@ -412,7 +412,8 @@
     const PEAK_HOUR_END   = 14; // 14:00 ET
     const PEAK_DURATION_MS = (PEAK_HOUR_END - PEAK_HOUR_START) * 3600 * 1000;
     const OFF_PEAK_DURATION_MS = (24 - (PEAK_HOUR_END - PEAK_HOUR_START)) * 3600 * 1000;
-    const TOTAL_SEGS = 30;
+    function getTotalSegs() { return window.innerWidth <= 768 ? 20 : 30; }
+    let TOTAL_SEGS = getTotalSegs();
 
     let selectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -651,9 +652,9 @@
         const res = await fetch('https://ipapi.co/json/');
         if (!res.ok) throw new Error('api fail');
         const data = await res.json();
-        if (data.timezone && data.city) {
+        if (data.timezone) {
           selectedTz = data.timezone;
-          el.innerHTML = `<strong>${data.timezone}</strong> · ${data.city}, ${data.country_code}`;
+          el.textContent = data.timezone;
           update();
           return;
         }
@@ -706,8 +707,7 @@
     function selectTz(tz) {
       selectedTz = tz;
       const el = document.getElementById('tz-display');
-      const city = tz.split('/').pop().replace(/_/g, ' ');
-      el.innerHTML = `<strong>${tz}</strong> · ${city}`;
+      el.textContent = tz;
       document.getElementById('tz-modal').classList.remove('open');
       // Reset and re-animate everything
       segsReady = false;
@@ -720,6 +720,19 @@
     update();
     detectTimezone();
     setInterval(update, 1000);
+
+    // Rebuild segments on viewport resize (handles mobile/desktop switch)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      const newTotal = getTotalSegs();
+      if (newTotal !== TOTAL_SEGS) {
+        TOTAL_SEGS = newTotal;
+        segsReady = false;
+        fillAnimDone = false;
+        buildSegments();
+        update();
+      }
+    });
   </script>
 </body>
 </html>
