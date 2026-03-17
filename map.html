@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude 2× · Timezone Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #1a1a1a;
+      --surface: #222222;
+      --green: #34D399;
+      --green-dim: rgba(52,211,153,0.12);
+      --green-bar: rgba(52,211,153,0.18);
+      --green-glow: rgba(52,211,153,0.4);
+      --orange: #E8734A;
+      --orange-dim: rgba(232,115,74,0.12);
+      --orange-bar: rgba(232,115,74,0.18);
+      --orange-glow: rgba(232,115,74,0.4);
+      --text: #ffffff;
+      --text-2: #999999;
+      --text-3: #999999;
+      --border: rgba(255,255,255,0.08);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar ── */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 40px;
+      flex-shrink: 0;
+    }
+
+    .top-left {
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .top-left:hover { color: #cccccc; }
+
+    .tz-value {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-3);
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .tz-value:hover { color: #cccccc; }
+
+    /* ── Page header ── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px 14px;
+      flex-shrink: 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 20px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: 1px solid;
+      transition: all 0.4s ease;
+    }
+    .badge.active {
+      background: var(--green-dim);
+      border-color: rgba(52,211,153,0.35);
+      color: var(--green);
+      box-shadow: 0 0 20px var(--green-dim);
+    }
+    .badge.inactive {
+      background: var(--orange-dim);
+      border-color: rgba(232,115,74,0.3);
+      color: var(--orange);
+      box-shadow: 0 0 20px var(--orange-dim);
+    }
+
+    .badge-pulse {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .badge.active .badge-pulse { background: var(--green); animation: pulse-green 1.5s infinite; }
+    .badge.inactive .badge-pulse { background: var(--orange); animation: pulse-orange 1.5s infinite; }
+
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 8px var(--green-glow); }
+      50%       { box-shadow: 0 0 20px var(--green), 0 0 40px var(--green-dim); }
+    }
+    @keyframes pulse-orange {
+      0%, 100% { box-shadow: 0 0 8px var(--orange-glow); }
+      50%       { box-shadow: 0 0 20px var(--orange), 0 0 40px var(--orange-dim); }
+    }
+
+    .time-left {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text-2);
+      letter-spacing: 0.05em;
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--text-3);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 2px;
+    }
+    .legend-dot.green  { background: var(--green-bar); border: 1px solid rgba(52,211,153,0.5); }
+    .legend-dot.orange { background: var(--orange-bar); border: 1px solid rgba(232,115,74,0.5); }
+
+    /* ── Columns area ── */
+    .columns-outer {
+      flex: 1;
+      min-height: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0 32px 16px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.08) transparent;
+    }
+    .columns-outer::-webkit-scrollbar { height: 3px; }
+    .columns-outer::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .columns-inner {
+      display: flex;
+      gap: 5px;
+      height: 100%;
+      align-items: stretch;
+    }
+
+    /* Time axis */
+    .time-axis {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex-shrink: 0;
+      padding: 36px 8px 44px 0;
+      user-select: none;
+    }
+    .time-axis-label {
+      font-size: 9px;
+      color: rgba(255,255,255,0.18);
+      letter-spacing: 0.04em;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    /* Column */
+    .col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      width: 62px;
+      flex-shrink: 0;
+      padding: 7px 4px 5px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      opacity: 0;
+      transform: translateY(14px);
+      transition: border-color 0.4s, background 0.4s, opacity 0.5s, transform 0.5s;
+    }
+    .col.visible   { opacity: 1; transform: translateY(0); }
+    .col.user-col  { border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.03); }
+    .col.et-col    { border-color: rgba(232,115,74,0.22); background: rgba(232,115,74,0.03); }
+
+    .col-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--text-3);
+      text-transform: uppercase;
+      text-align: center;
+      flex-shrink: 0;
+      line-height: 1.4;
+    }
+
+    .col-tag {
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      padding: 1px 4px;
+      border-radius: 3px;
+      margin-top: 2px;
+    }
+    .col.user-col .col-tag { color: var(--green); background: rgba(52,211,153,0.15); }
+    .col.et-col   .col-tag { color: var(--orange); background: rgba(232,115,74,0.15); }
+
+    .col-bar-wrap {
+      flex: 1;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+    }
+
+    .col-bar {
+      width: 100%;
+      height: 100%;
+      transition: background 0.5s ease;
+    }
+
+    /* 6-hour grid lines */
+    .col-grid {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0%,
+        transparent calc(25% - 1px),
+        rgba(255,255,255,0.04) calc(25% - 1px),
+        rgba(255,255,255,0.04) 25%
+      );
+      pointer-events: none;
+    }
+
+    /* "Now" cursor */
+    .col-now {
+      position: absolute;
+      left: 0; right: 0;
+      height: 1px;
+      background: rgba(255,255,255,0.55);
+      z-index: 2;
+      transition: top 0.9s linear;
+    }
+    .col-now::before {
+      content: '';
+      position: absolute;
+      left: 3px; top: -2.5px;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.8);
+    }
+    .col.user-col .col-now         { background: var(--green); }
+    .col.user-col .col-now::before { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    .col.et-col   .col-now         { background: var(--orange); }
+    .col.et-col   .col-now::before { background: var(--orange); }
+
+    .col-time {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--text-2);
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .col.user-col .col-time { color: var(--green); }
+    .col.et-col   .col-time { color: var(--orange); }
+
+    .col-city {
+      font-size: 8px;
+      font-weight: 400;
+      letter-spacing: 0.03em;
+      color: var(--text-3);
+      opacity: 0.5;
+      text-align: center;
+      flex-shrink: 0;
+      max-width: 56px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 4px 40px 14px;
+      flex-shrink: 0;
+      gap: 20px;
+    }
+    .view-link {
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .view-link:hover { color: #cccccc; }
+
+    /* ── Timezone Modal ── */
+    .tz-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .tz-modal-overlay.open { display: flex; }
+    .tz-modal {
+      background: #222;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      width: 380px;
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .tz-modal-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+    .tz-search {
+      background: #1a1a1a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: var(--text);
+      outline: none;
+    }
+    .tz-search:focus { border-color: rgba(255,255,255,0.2); }
+    .tz-list { list-style: none; overflow-y: auto; flex: 1; }
+    .tz-list li {
+      padding: 8px 6px;
+      font-size: 12px;
+      color: var(--text-2);
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tz-list li:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      .top-bar     { padding: 14px 20px; }
+      .page-header { padding: 0 20px 10px; }
+      .columns-outer { padding: 0 16px 12px; }
+      .footer      { padding: 4px 20px 12px; }
+      .col         { width: 50px; }
+      .col-city    { display: none; }
+      .legend      { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <a class="top-left" href="https://support.claude.com/en/articles/14063676-claude-march-2026-usage-promotion" target="_blank" rel="noopener">Claude Usage Promotion</a>
+    <div class="tz-value" id="tz-display" onclick="openTzPicker()">Detecting...</div>
+  </div>
+
+  <div class="page-header">
+    <div class="header-left">
+      <div class="badge active" id="badge">
+        <div class="badge-pulse"></div>
+        <span id="badge-label">2X ACTIVATE</span>
+      </div>
+      <div class="time-left" id="time-left">-- h -- m left</div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot green"></div>2X Active</div>
+      <div class="legend-item"><div class="legend-dot orange"></div>Peak</div>
+    </div>
+  </div>
+
+  <div class="columns-outer" id="columns-outer">
+    <div class="columns-inner" id="columns-inner">
+      <div class="time-axis" id="time-axis">
+        <div class="time-axis-label">00:00</div>
+        <div class="time-axis-label">06:00</div>
+        <div class="time-axis-label">12:00</div>
+        <div class="time-axis-label">18:00</div>
+        <div class="time-axis-label">24:00</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="index.html" class="view-link">Timeline</a>
+    <a href="globe.html" class="view-link">Globe</a>
+  </div>
+
+  <!-- Timezone picker modal -->
+  <div class="tz-modal-overlay" id="tz-modal" onclick="closeTzPicker(event)">
+    <div class="tz-modal" onclick="event.stopPropagation()">
+      <div class="tz-modal-title">Select Timezone</div>
+      <input type="text" class="tz-search" id="tz-search" placeholder="Search timezones..." oninput="filterTimezones()">
+      <ul class="tz-list" id="tz-list"></ul>
+    </div>
+  </div>
+
+  <script>
+    // ── Config ──
+    const ET_TZ = 'America/New_York';
+    const PEAK_HOUR_START = 8;
+    const PEAK_HOUR_END   = 14;
+    const PROMO_START = '2026-03-13';
+    const PROMO_END   = '2026-03-27';
+    const PEAK_DUR_MS = (PEAK_HOUR_END - PEAK_HOUR_START) * 3600000;
+
+    function pad(n) { return String(Math.max(0, Math.floor(n))).padStart(2, '0'); }
+
+    let selectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let userOffset = null;
+
+    // ── Peak window helpers (verbatim from index.html) ──
+    function etDateParts(date) {
+      const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: ET_TZ,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      });
+      const parts = {};
+      for (const p of fmt.formatToParts(date)) parts[p.type] = p.value;
+      return parts;
+    }
+
+    function etToUtcMs(year, month, day, hour) {
+      const utcMidnight = Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day));
+      const guess = new Date(utcMidnight + hour * 3600000);
+      const etH = parseInt(etDateParts(guess).hour);
+      return guess.getTime() - (etH - hour) * 3600000;
+    }
+
+    function getTodayPeakWindow(now) {
+      const p = etDateParts(now);
+      return {
+        peakStart: etToUtcMs(p.year, p.month, p.day, PEAK_HOUR_START),
+        peakEnd:   etToUtcMs(p.year, p.month, p.day, PEAK_HOUR_END)
+      };
+    }
+
+    function isInPromoPeriod(now) {
+      const p = etDateParts(now);
+      const d = `${p.year}-${p.month}-${p.day}`;
+      return d >= PROMO_START && d <= PROMO_END;
+    }
+
+    const PREVIEW_STATE = new URLSearchParams(location.search).get('preview');
+
+    function getCycleInfo(now) {
+      const nowMs = now.getTime();
+      const { peakStart, peakEnd } = getTodayPeakWindow(now);
+      const next = getTodayPeakWindow(new Date(nowMs + 86400000));
+      const prev = getTodayPeakWindow(new Date(nowMs - 86400000));
+
+      if (PREVIEW_STATE === 'deactive') return { active: false, remaining: (peakEnd - peakStart - PEAK_DUR_MS * 0.5) / 1000, pct: 50 };
+      if (PREVIEW_STATE === 'active')   return { active: true,  remaining: (next.peakStart - peakEnd) * 0.6 / 1000, pct: 40 };
+
+      if (nowMs >= peakStart && nowMs < peakEnd) {
+        return { active: false, remaining: (peakEnd - nowMs) / 1000, pct: (nowMs - peakStart) / PEAK_DUR_MS * 100 };
+      }
+      const offStart = nowMs >= peakEnd ? peakEnd : prev.peakEnd;
+      const offEnd   = nowMs >= peakEnd ? next.peakStart : peakStart;
+      return { active: true, remaining: (offEnd - nowMs) / 1000, pct: (nowMs - offStart) / (offEnd - offStart) * 100 };
+    }
+
+    // ── Column data ──
+    const UTC_OFFSETS = [-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+
+    const CITIES = {
+      '-12':'Baker Is.','-11':'Pago Pago','-10':'Honolulu','-9':'Anchorage',
+      '-8':'Los Angeles','-7':'Denver','-6':'Chicago','-5':'New York',
+      '-4':'Halifax','-3':'São Paulo','-2':'—','-1':'Azores',
+      '0':'London','1':'Paris','2':'Cairo','3':'Moscow','4':'Dubai',
+      '5':'Karachi','6':'Dhaka','7':'Bangkok','8':'Singapore','9':'Tokyo',
+      '10':'Sydney','11':'Noumea','12':'Auckland','13':'Samoa','14':'Kiritimati'
+    };
+
+    // Get UTC offset (integer hours) for a given IANA timezone name
+    function tzOffset(tz) {
+      const now = new Date();
+      const fmt = (z) => new Intl.DateTimeFormat('en', {
+        timeZone: z, hour: '2-digit', hour12: false
+      }).formatToParts(now).find(p => p.type === 'hour').value;
+      let diff = parseInt(fmt(tz)) - parseInt(fmt('UTC'));
+      if (diff > 12)  diff -= 24;
+      if (diff < -12) diff += 24;
+      return Math.round(diff);
+    }
+
+    function getETOffset() { return tzOffset(ET_TZ); }
+
+    // Build gradient for a column given its UTC offset
+    function buildGradient(offsetH, now) {
+      const { peakStart } = getTodayPeakWindow(now);
+      // Local hour at which peak starts in this timezone
+      const localStart = new Date(peakStart + offsetH * 3600000);
+      const startH = localStart.getUTCHours() + localStart.getUTCMinutes() / 60;
+      const endH   = startH + (PEAK_HOUR_END - PEAK_HOUR_START); // +6h, may exceed 24
+
+      const g = 'rgba(52,211,153,0.18)';
+      const o = 'rgba(232,115,74,0.18)';
+      const s = (startH / 24 * 100).toFixed(3);
+
+      if (endH <= 24) {
+        const e = (endH / 24 * 100).toFixed(3);
+        return `linear-gradient(to bottom,${g} 0%,${g} ${s}%,${o} ${s}%,${o} ${e}%,${g} ${e}%,${g} 100%)`;
+      } else {
+        // Overnight wrap (orange at top + bottom)
+        const w = ((endH - 24) / 24 * 100).toFixed(3);
+        return `linear-gradient(to bottom,${o} 0%,${o} ${w}%,${g} ${w}%,${g} ${s}%,${o} ${s}%,${o} 100%)`;
+      }
+    }
+
+    // "Now" cursor top percentage for a given UTC offset
+    function nowPct(offsetH) {
+      const now = new Date();
+      const local = new Date(now.getTime() + offsetH * 3600000);
+      const h = local.getUTCHours() + local.getUTCMinutes() / 60 + local.getUTCSeconds() / 3600;
+      return (h / 24 * 100).toFixed(3) + '%';
+    }
+
+    // Current local time string for a UTC offset
+    function localTime(offsetH) {
+      const local = new Date(Date.now() + offsetH * 3600000);
+      return pad(local.getUTCHours()) + ':' + pad(local.getUTCMinutes());
+    }
+
+    // Format offset as label
+    function offsetLabel(o) {
+      if (o === 0) return 'UTC';
+      return o > 0 ? `UTC+${o}` : `UTC${o}`;
+    }
+
+    // ── Build columns ──
+    function buildColumns() {
+      const container = document.getElementById('columns-inner');
+      const axis = document.getElementById('time-axis');
+      container.innerHTML = '';
+      container.appendChild(axis);
+
+      const now = new Date();
+      const etOff = getETOffset();
+      userOffset = tzOffset(selectedTz);
+
+      UTC_OFFSETS.forEach((offset, i) => {
+        const isET   = offset === etOff;
+        const isUser = offset === userOffset;
+
+        const col = document.createElement('div');
+        col.className = 'col' + (isET ? ' et-col' : '') + (isUser ? ' user-col' : '');
+        col.id = 'col-' + offset;
+
+        const labelTag = isUser ? 'YOU' : isET ? 'ET' : null;
+        const labelHtml = `<div class="col-label">${offsetLabel(offset)}${labelTag ? `<br><span class="col-tag">${labelTag}</span>` : ''}</div>`;
+
+        const grad = buildGradient(offset, now);
+        const np   = nowPct(offset);
+        const barHtml = `
+          <div class="col-bar-wrap">
+            <div class="col-bar" id="bar-${offset}" style="background:${grad}"></div>
+            <div class="col-grid"></div>
+            <div class="col-now" id="now-${offset}" style="top:${np}"></div>
+          </div>`;
+
+        const city = CITIES[String(offset)] || '';
+        const footerHtml = `
+          <div class="col-time" id="ct-${offset}">${localTime(offset)}</div>
+          <div class="col-city">${city}</div>`;
+
+        col.innerHTML = labelHtml + barHtml + footerHtml;
+        container.appendChild(col);
+
+        // Staggered entrance
+        setTimeout(() => col.classList.add('visible'), 60 + i * 38);
+      });
+
+      // Scroll user's column into view after animation starts
+      setTimeout(() => {
+        const userCol = document.getElementById('col-' + userOffset);
+        if (userCol) userCol.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }, 600);
+    }
+
+    // ── Tick: update cursors + time labels ──
+    function updateColumns() {
+      UTC_OFFSETS.forEach(o => {
+        const nowEl  = document.getElementById('now-' + o);
+        const timeEl = document.getElementById('ct-' + o);
+        if (nowEl)  nowEl.style.top = nowPct(o);
+        if (timeEl) timeEl.textContent = localTime(o);
+      });
+    }
+
+    // ── Update badge + countdown ──
+    function updateStatus() {
+      const now = new Date();
+      const cycle = getCycleInfo(now);
+      const h = Math.floor(cycle.remaining / 3600);
+      const m = Math.floor((cycle.remaining % 3600) / 60);
+
+      document.getElementById('badge').className = 'badge ' + (cycle.active ? 'active' : 'inactive');
+      document.getElementById('badge-label').textContent = cycle.active ? '2X ACTIVATE' : '2X DEACTIVATE';
+      document.getElementById('time-left').textContent = h + 'h ' + pad(m) + 'm left';
+    }
+
+    // ── Timezone detection ──
+    async function detectTimezone() {
+      const el = document.getElementById('tz-display');
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (data.timezone) {
+          selectedTz = data.timezone;
+          el.textContent = data.timezone;
+          const newOffset = tzOffset(data.timezone);
+          if (newOffset !== userOffset) {
+            userOffset = newOffset;
+            // Re-highlight user column
+            document.querySelectorAll('.col.user-col').forEach(c => {
+              c.classList.remove('user-col');
+              const tag = c.querySelector('.col-tag');
+              if (tag && tag.textContent === 'YOU') tag.remove();
+            });
+            const col = document.getElementById('col-' + userOffset);
+            if (col) {
+              col.classList.add('user-col');
+              const label = col.querySelector('.col-label');
+              if (label && !label.querySelector('.col-tag')) {
+                label.innerHTML += '<br><span class="col-tag">YOU</span>';
+              }
+              setTimeout(() => col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }), 300);
+            }
+          }
+          return;
+        }
+      } catch (_) {}
+      el.textContent = selectedTz;
+    }
+
+    // ── Timezone picker ──
+    const ALL_TIMEZONES = (Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : [
+      'UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+      'America/Anchorage','Pacific/Honolulu','America/Toronto','America/Vancouver',
+      'America/Sao_Paulo','America/Argentina/Buenos_Aires','Europe/London','Europe/Paris',
+      'Europe/Berlin','Europe/Madrid','Europe/Rome','Europe/Amsterdam','Europe/Moscow',
+      'Europe/Istanbul','Africa/Cairo','Africa/Lagos','Africa/Johannesburg',
+      'Asia/Dubai','Asia/Kolkata','Asia/Bangkok','Asia/Singapore','Asia/Shanghai',
+      'Asia/Tokyo','Asia/Seoul','Australia/Sydney','Australia/Melbourne',
+      'Pacific/Auckland','Pacific/Fiji'
+    ]);
+
+    function openTzPicker() {
+      document.getElementById('tz-modal').classList.add('open');
+      const s = document.getElementById('tz-search');
+      s.value = '';
+      renderTzList('');
+      setTimeout(() => s.focus(), 100);
+    }
+
+    function closeTzPicker(e) {
+      if (e.target === document.getElementById('tz-modal'))
+        document.getElementById('tz-modal').classList.remove('open');
+    }
+
+    function filterTimezones() { renderTzList(document.getElementById('tz-search').value); }
+
+    function renderTzList(query) {
+      const q = query.toLowerCase();
+      const filtered = ALL_TIMEZONES.filter(tz => tz.toLowerCase().includes(q));
+      document.getElementById('tz-list').innerHTML =
+        filtered.map(tz => `<li onclick="selectTz('${tz}')">${tz.replace(/_/g,' ')}</li>`).join('');
+    }
+
+    function selectTz(tz) {
+      selectedTz = tz;
+      document.getElementById('tz-display').textContent = tz;
+      document.getElementById('tz-modal').classList.remove('open');
+
+      const newOffset = tzOffset(tz);
+      if (newOffset === userOffset) return;
+      userOffset = newOffset;
+
+      document.querySelectorAll('.col.user-col').forEach(c => {
+        c.classList.remove('user-col');
+        const tag = c.querySelector('.col-tag');
+        if (tag && tag.textContent === 'YOU') tag.remove();
+      });
+
+      const col = document.getElementById('col-' + userOffset);
+      if (col) {
+        col.classList.add('user-col');
+        const label = col.querySelector('.col-label');
+        if (label && !label.querySelector('.col-tag')) {
+          label.innerHTML += '<br><span class="col-tag">YOU</span>';
+        }
+        setTimeout(() => col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }), 100);
+      }
+    }
+
+    // ── Init ──
+    buildColumns();
+    updateStatus();
+    detectTimezone();
+    setInterval(() => { updateColumns(); updateStatus(); }, 1000);
+  </script>
+</body>
+</html>
